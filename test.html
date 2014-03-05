@@ -62,13 +62,12 @@
 
         var exp='('+scripts[i].getAttribute('data')+')';
         exp=exp.replace(/\n/g,'');
-        console.log(exp);
         var data=eval(exp)||{};
         console.time(i);
         html[i]=html[id]=Whisker.render($(id),data);
         console.timeEnd(i);
     }
-
+    console.log(html)
 
 </script>
 </body>
