@@ -1,8 +1,10 @@
-reated with JetBrains PhpStorm.
- * User: godsong
- * Date: 14-2-2
- * Time: 下午10:38
- */
+/**
+ * Whisker.js
+ * A logic-less and extensible template engine
+ * @author exolution
+ * @version v0.3.3
+ *
+ * */
 ;
 !function () {
 
@@ -10,7 +12,9 @@ reated with JetBrains PhpStorm.
         OUT_BLOCK: 0,
         IN_BLOCK: 1
     };
-
+    function Eval(exp){
+        return new Function('','return '+exp)();
+    }
     function Context(html, scope) {//解析的上下文 整个模板解析过程都依赖这个结构
         this.blockStack = [ //块结构 用于处理嵌套结构
             {
@@ -124,7 +128,7 @@ reated with JetBrains PhpStorm.
             });
 
             try {
-                var f = eval(exp);
+                var f = Eval(exp);
             }
             catch (e) {
                 this.throwError('criteria error :"' + oldExp + '" real value="' + exp + '"');
@@ -141,7 +145,7 @@ reated with JetBrains PhpStorm.
                         args.push(+val);
                     }
                     else if (val.charAt(0) == "'" && val.charAt(val.length - 1) == "'") {
-                        args.push(val);
+                        args.push(val.slice(1,-1));
                     }
                     else if (/^\$[_a-zA-Z0-9.]*$/.test(val)) {
                         args.push(this.eval(scope, val.slice(1)));
@@ -229,7 +233,9 @@ reated with JetBrains PhpStorm.
         throwError: function (msg) {//抛出错误 会显示错误位置
             msg = 'Parse Error:' + msg;
 
-            var stack = this.html.substring(this.idx - 40, this.idx) + '"' + this.html.charAt(this.idx) + '"' + this.html.substring(this.idx + 1, this.idx + 40);
+            var stack = this.html.substring(this.idx - 40, this.idx) + '"'
+                + this.html.charAt(this.idx) + '"'
+                + this.html.substring(this.idx + 1, this.idx + 40);
             if (console && typeof console.log == 'function') {
                 console.log(msg + '\n at: ' + stack);
             }
@@ -265,7 +271,7 @@ reated with JetBrains PhpStorm.
     };
     var NativeMethod = {
         add: function (name, func) {
-            this.name = func;
+            this[name] = func;
         }
     };
     var BlockMode = {//块模式管理器 $#/
@@ -307,7 +313,6 @@ reated with JetBrains PhpStorm.
                 handler = BlockMode.handlers[context.blockType];
                 context.blockContent[context.blockType] = '';
                 handler.onEndBlock && handler.onEndBlock(blockContent, context);
-
             }
             else {
                 handler = BlockMode.handlers[context.blockType];
@@ -337,7 +342,16 @@ reated with JetBrains PhpStorm.
         ctx.result += this.invoke(scope, varNode.exp);
     });
     VarNodeManager.add('property', function (varNode, scope, ctx) {
-        ctx.result += this.eval(scope, varNode.exp)
+        var flag=false;
+        if(varNode.exp.indexOf('~')!=-1){
+            flag=true;
+            varNode.exp=varNode.exp.replace('~','');
+        }
+        var res= this.eval(scope, varNode.exp);
+        if(res&&flag){
+            res=res.replace('<','&lt;').replace('>','&gt;');
+        }
+        ctx.result +=res;
     });
     VarNodeManager.add('branch', function (varNode, scope, ctx) {
         var criteria = this.test(scope, varNode.exp);
@@ -390,10 +404,18 @@ reated with JetBrains PhpStorm.
                     context.saveVar(blockContent, 'property');
                 }
                 else {
+                    var flag=false;
                     block = context.Block();
+                    if(blockContent.indexOf('~')!=-1){
+                        flag=true;
+                        blockContent=blockContent.replace('~','');
+                    }
                     var res = context.eval(block.blockScope, blockContent);
                     if (typeof res == 'object') {
                         res = res.toString();
+                    }
+                    if(flag&&res){
+                        res=res.replace('<','&lt;').replace('>','&gt;');
                     }
                     block.result.push(res);
                 }
@@ -401,7 +423,7 @@ reated with JetBrains PhpStorm.
         },
         onInBlock: function (ch, context) {
             if (!context.skipMode) {
-                if (/[$^_a-zA-Z0-9.]/.test(ch)) {
+                if((ch=='~'&&context.blockContent[context.blockType].length==0)||/[$^_a-zA-Z0-9.]/.test(ch)){
                     context.blockContent[context.blockType] += ch;
                 }
                 else {
@@ -499,7 +521,7 @@ reated with JetBrains PhpStorm.
                 return v.toString();
             });
             try {
-                var res = eval(exp);
+                var res =Eval(exp);
             } catch (e) {
                 context.throwError('%express error:"' + blockContent + '" real value="' + exp + '"');
             }
@@ -708,14 +730,14 @@ reated with JetBrains PhpStorm.
 
 
     function render(html, data) {
-        var ch = '',
-            context = new Context(html, data);
         if (!html) {
             return html;
         }
         if (data == undefined || data == null) {
             data = {};
         }
+        var ch = '',
+            context = new Context(html, data);
         while (context.idx < html.length) {
             ch = html.charAt(context.idx);
             resolveChar(ch, context);
@@ -728,16 +750,15 @@ reated with JetBrains PhpStorm.
             return context.errorMsg;
         }
         if (context.blockStack.length > 1) {
-            context.throwError('{#' + context.Block().blockName + '} need a close block "{/' + context.Block().blockName + '}"', context);
+            var blockName=context.Block().blockName;
+            context.throwError('{#' + blockName + '} need a close block "{/' + blockName + '}"');
         }
         context.Block().result.push(context.text);
 
         return context.resolveBlock();
     }
 
-    NativeMethod.add('#CALC', function (exp) {
-        return new Function('return ' + exp)();
-    });
+
     var whisker = {};
     whisker.Context = Context;
     whisker.GroupManager = GroupManager;
