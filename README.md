@@ -1,4 +1,4 @@
-#Whisker.js 一个轻逻辑&可扩展的js模板引擎
+#Whisker.js - 轻逻辑&可扩展的js模板引擎
 
 ##为什么选择 Whisker.js
 
@@ -141,6 +141,9 @@ Whisker.render('{$obj.$abc}',data);
 注意：参数不允许出现表达式 如 1+2, $index+1 皆为非法
 
 另外，`调用方法时，方法的this为当前的scope`
+示例见第一个例子
+
+
 
 ##表达式
 {%$index+1*(2+3)} 以%开头即表示表达式
@@ -177,9 +180,42 @@ P.S.对if做了优化，建议多在最外层使用if 因为能立即判断if的
 这个跟each相似，不过他只是简单的重复，而且它不会创建新的block。但是每次循环会创建新的scope
 scope包含两个值 一个是 $INDEX 代表循环索引从0递增的数字，另一个是$SEQ 代表循环序号，从1递增的数字
 参数：数字常量，或者单一属性  {$xxx} 不支持表达式
+示例
+```js
+var data={
+    num:6,
+    list:['1-3','4','5-6']
+}
+var tmpl='{#repeat $num}'                                       +
+             '{#if $INDEX<3}{$SEQ} in range:{$list.0}\n'        +
+             '{#elseif $INDEX==3}{$SEQ} in range:{$list.1}\n'   +
+             '{#else}{$SEQ} in range:{$list.2}\n'               +
+             '{/if}'                                            +
+         '{/repeat}';
+Whisker.render(tmpl,data);
+/*result
+"1 in range:1-3
+2 in range:1-3
+3 in range:1-3
+4 in range:4
+5 in range:5-6
+6 in range:5-6
+"
 
 
+*/
+```
 
+##导入模板 (额 这段逻辑没了先忽略吧=。= 莫名其妙估计版本管理的时候丢了 回头再写吧 反正不复杂)
+{<partials} 类似于include。导入一个外部的模板代码，有利于模板的组织和分离。和直接将外部的模板代码直接替换到该位置一模一样。 不过需要给render传入第三个参数及外部模板对象 以键值对形式，partials对应该对象的键名
+实例
+```js
+var data=[1,2,3];
+Whisker.render('{#each $}{<out}{/each}',data,{
+    out:'<div>{$}</div>'
+});
+
+```
 
 
 
@@ -189,12 +225,17 @@ scope包含两个值 一个是 $INDEX 代表循环索引从0递增的数字，�
 不过目前的扩展简单性还需要琢磨 （其实这已经是抽取出来的了，掩盖了很多底层细节了）
 ```js
 BlockManager.register('each', function (context, block) {
+        //context 解析的上下文对象 用户主要使用他的三个方法 eval resolveResult和throwError 下面会逐一介绍
+        //block就是当前这个each的block对象。包含一些block相关的信息。
+        //block.blockArgs 这个block的参数即each 后面的参数
+        //block.blockScope 这个block的scope block创建时继承于上层block的scope
+        //由用户决定是否创建新的blockscope，如果是允许嵌套的结构一定要设置新的blockscope哦
         var result = '';//结果
-        //参数处理
+        //参数处理 主要将$aaa=>$bbb解析出来
         var params = /^\$([a-zA-Z0-9_.]*)(?:\(\$([a-zA-Z0-9_]+)=>\$([a-zA-Z0-9_]+)\))?$/.exec(block.blockArgs);
         
-        if (params) {
-            //设置当前block的scope
+        if (params) {//参数符合规范
+            //设置当前block的scope context.eval对
             block.blockScope = context.eval(block.blockScope, params[1]);
             
             if (params[2]) {
@@ -208,14 +249,14 @@ BlockManager.register('each', function (context, block) {
                 if (list.length > 0) {//判断是数组还是键值对 //这一点有一定缺陷 
                     for (var i = 0; i < list.length; i++) {
                         if (key) {
-                            var scope = {};
+                            var scope = {};//创建每次迭代的scope
                             scope[key] = i;
                             scope[val] = list[i];
                         }
                         else {
                             scope = list[i];
                         }
-
+                        //链接每次迭代的输出 resolveBlock函数会以scope作为当前scope输出block的结果。
                         result += context.resolveBlock(block, scope);
                     }
                 }
@@ -233,16 +274,23 @@ BlockManager.register('each', function (context, block) {
                     }
                 }
             }
-        }
+        }//参数不合法 跑出错误
         else context.throwError('can\'t resolve arguments of {each}:"' + block.blockArgs + '"');
-        return result;
+        return result;//返回最终结果
     });
 ```
+写到这突然发现，尼玛 这所谓的扩展好复杂啊。还得隐藏底层细节。回去继续重构~ 不过不耽误使用
+
+下一步计划
+* 1、重构，优化用户扩展性
+* 2、专注性能~ 之前的简单测试中性能在mustache之下在handlebar之上
+* 3、预编译，其实我的模式现在编译和计算结构本来就分离的。原理就是把整个模板编译成一个block链组成的结果集。可以考虑下把这个结果姐持久化，然后直接求值，提高效率。
+* 4、配置化 定制化。 目前想一些格式化功能和一些无关痛痒的功能可以选配。
 
 
 
 
-
+额 下面蹩脚的英文可以无视之~
 
 
 
