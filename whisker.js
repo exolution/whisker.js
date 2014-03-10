@@ -2,7 +2,7 @@
  * Whisker.js
  * A logic-less and extensible template engine
  * @author exolution
- * @version v0.3.3
+ * @version v0.3.4
  *
  * */
 ;
@@ -111,27 +111,41 @@
             }
         },
         test: function (scope, exp) {//条件表达式测试
-            var self = this, oldExp = exp;
-
-            exp = exp.replace(/\$([_a-zA-Z0-9.]*)/g, function (a, b) {
-                var v = self.eval(scope, b);
-                if (typeof v == 'string') {
-                    v = '"' + v + '"';
+            var self = this, oldExp = exp, f;
+            var m = /^(\!)?(\$[$_a-zA-Z0-9.]*)$/.exec(exp);//对于没有表达式的情况进行优化。
+            if (m != null) {
+                var obj=this.eval(scope,m[2]);
+                if(obj instanceof Array){
+                    f=obj.length>0;
                 }
-                else if (v == undefined) {
-                    return 'undefined';
+                else {
+                    f=!!obj;
                 }
-                else if (typeof v == 'object') {
-                    return !!v;
+                if(m[1]=='!'){
+                    f=!f;
                 }
-                return v.toString();
-            });
-
-            try {
-                var f = Eval(exp);
+                return f;
             }
-            catch (e) {
-                this.throwError('criteria error :"' + oldExp + '" real value="' + exp + '"');
+            else {
+                exp = exp.replace(/\$([_a-zA-Z0-9.]*)/g, function (a, b) {
+                    var v = self.eval(scope, b);
+                    if (typeof v == 'string') {
+                        v = '"' + v + '"';
+                    }
+                    else if (v == undefined) {
+                        return 'undefined';
+                    }
+                    else if (typeof v == 'object') {
+                        return !!v;
+                    }
+                    return v.toString();
+                });
+                try {
+                    f = Eval(exp);
+                }
+                catch (e) {
+                    this.throwError('criteria error :"' + oldExp + '" real value="' + exp + '"');
+                }
             }
             return f;
         },
@@ -243,6 +257,10 @@
             this.error = true;
         }
     };
+    var config={
+        startDelimeter:'{',
+        endDelimeter:'}'
+    };
     var Format = {
         after: function (context) {
             var nextChar = context.html.charAt(context.idx + 1);
@@ -287,7 +305,7 @@
 
     function resolveChar(ch, context) {
         var nch, handler;
-        if (context.state != ParseState.IN_BLOCK && ch == '{') {
+        if (context.state != ParseState.IN_BLOCK && ch == config.startDelimeter) {
             nch = context.html.charAt(context.idx + 1);
             if (BlockMode.filter.test(nch)) {
                 if (!context.skipMode) {
@@ -307,7 +325,7 @@
             }
         }
         else if (context.state == ParseState.IN_BLOCK) {
-            if (ch == '}') {
+            if (ch == config.endDelimeter) {
                 context.state = ParseState.OUT_BLOCK;
                 var blockContent = context.blockContent[context.blockType];
                 handler = BlockMode.handlers[context.blockType];
@@ -760,6 +778,7 @@
 
 
     var whisker = {};
+    whisker.config=config;
     whisker.Context = Context;
     whisker.GroupManager = GroupManager;
     whisker.BlockMode = BlockMode;
