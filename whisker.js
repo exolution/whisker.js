@@ -2,7 +2,7 @@
  * Whisker.js
  * A logic-less and extensible template engine
  * @author exolution
- * @version v0.3.4
+ * @version v0.3.6
  *
  * */
 ;
@@ -12,6 +12,52 @@
         OUT_BLOCK: 0,
         IN_BLOCK: 1
     };
+    var config={
+
+    };
+    function Delimeter(begin,end){
+        end=end||begin;
+        if(begin.length+end.length<=4){
+            this.beginNum=begin.length;
+            this.begin=begin;
+            if(this.beginNum>1){
+                this.b=[begin.charAt(0),begin.charAt(1)];
+            }
+
+            this.endNum=end.length;
+            this.end=end;
+            if(this.endNum>1){
+                this.e=[end.charAt(0),end.charAt(1)];
+            }
+        }
+        else{
+            console.warn('max delimeter length is 2');
+        }
+    }
+    Delimeter.prototype={
+        isBegin:function(ch,idx,text){
+
+            if(this.beginNum==1){
+                return ch==this.begin;
+            }
+            else{
+                return ch==this.b[0]&&text.charAt(idx+1)==this.b[1];
+            }
+        },
+        isEnd:function(ch,idx,text){
+
+            if(this.endNum==1){
+                return ch==this.end;
+            }
+            else{
+                return ch==this.e[0]&&text.charAt(idx+1)==this.e[1];
+            }
+        }
+
+    };
+
+
+    config.delimeter=new Delimeter('{','}');
     function Eval(exp){
         return new Function('','return '+exp)();
     }
@@ -280,36 +326,38 @@
             }
             this.errorMsg = msg + '\n at: ' + stack;
             this.error = true;
+
         }
     };
-    var config={
-        startDelimeter:'{',
-        endDelimeter:'}'
-    };
+
     var Format = {
+        flag:true,
         after: function (context) {
-            var nextChar = context.html.charAt(context.idx + 1);
-            if (nextChar == '\n') {
-                context.idx++;
-            }
-            if (nextChar == '\r') {
-                context.idx++;
-                if (context.html.charAt(context.idx + 1) == '\n') {
+            if(this.flag){
+                var nextChar = context.html.charAt(context.idx + 1);
+                if (nextChar == '\n') {
                     context.idx++;
+                }
+                if (nextChar == '\r') {
+                    context.idx++;
+                    if (context.html.charAt(context.idx + 1) == '\n') {
+                        context.idx++;
+                    }
                 }
             }
         },
         before: function (context) {//格式化
-            var result = context.Block().result,
-                prev = result[result.length - 1];
-            if (typeof prev == 'string') {
-                var len = prev.length, ct = len;
-                while (prev.charAt(--len) == ' ') {
-                    ct--;
+            if(this.flag){
+                var result = context.Block().result,
+                    prev = result[result.length - 1];
+                if (typeof prev == 'string') {
+                    var len = prev.length, ct = len;
+                    while (prev.charAt(--len) == ' ') {
+                        ct--;
+                    }
+                    result[result.length - 1] = prev.slice(0, ct)
                 }
-                result[result.length - 1] = prev.slice(0, ct)
             }
-
         }
     };
     var NativeMethod = {
@@ -330,8 +378,8 @@
 
     function resolveChar(ch, context) {
         var nch, handler;
-        if (context.state != ParseState.IN_BLOCK && ch == config.startDelimeter) {
-            nch = context.html.charAt(context.idx + 1);
+        if (context.state != ParseState.IN_BLOCK && config.delimeter.isBegin(ch,context.idx,context.html)) {
+            nch = context.html.charAt(context.idx + config.delimeter.beginNum);
             if (BlockMode.filter.test(nch)) {
                 if (!context.skipMode) {
                     context.Block().result.push(context.text);
@@ -341,7 +389,7 @@
                 context.blockType = nch;
                 handler = BlockMode.handlers[nch];
                 handler.onStartBlock && handler.onStartBlock(context);
-                context.idx++;
+                context.idx+= config.delimeter.beginNum;
             }
             else {
                 if (!context.skipMode) {
@@ -350,12 +398,13 @@
             }
         }
         else if (context.state == ParseState.IN_BLOCK) {
-            if (ch == config.endDelimeter) {
+            if (config.delimeter.isEnd(ch,context.idx,context.html)) {
                 context.state = ParseState.OUT_BLOCK;
                 var blockContent = context.blockContent[context.blockType];
                 handler = BlockMode.handlers[context.blockType];
                 context.blockContent[context.blockType] = '';
                 handler.onEndBlock && handler.onEndBlock(blockContent, context);
+                context.idx+=config.delimeter.endNum-1;
             }
             else {
                 handler = BlockMode.handlers[context.blockType];
@@ -470,7 +519,7 @@
                     context.blockContent[context.blockType] += ch;
                 }
                 else {
-                    context.text += '{' + context.blockType + context.blockContent[context.blockType] + ch;
+                    context.text += config.delimeter.begin + context.blockType + context.blockContent[context.blockType] + ch;
                     context.state = ParseState.OUT_BLOCK;
                 }
             }
@@ -808,15 +857,26 @@
 
 
     var whisker = {};
-    whisker.config=config;
     whisker.Context = Context;
     whisker.GroupManager = GroupManager;
     whisker.BlockMode = BlockMode;
     whisker.render = render;
+    whisker.tmpl=function(id){
+      var el=document.getElementById(id);
+        return el&&el.innerHTML;
+    };
+    whisker.setDelimeter=function(begin,end){
+        config.delimeter=new Delimeter(begin,end);
+    };
+    whisker.setFormat=function(flag){
+        Format.flag=flag;
+    };
+    whisker.config=function(name,args){
+      this['set'+name.charAt(0).toUpperCase()+name.slice(1)].apply(this,Array.prototype.slice.call(arguments,1));
+    };
     whisker.register = function (name, handler) {
         BlockManager.register(name, handler);
     };
-
 
     whisker.register('repeat', function (context, block) {
         var args = block.blockArgs, result = '';
