@@ -15,7 +15,8 @@
     function Eval(exp){
         return new Function('','return '+exp)();
     }
-    function Context(html, scope) {//解析的上下文 整个模板解析过程都依赖这个结构
+    function Context(html, scope,partials) {//解析的上下文 整个模板解析过程都依赖这个结构
+        scope=scope||{};
         this.blockStack = [ //块结构 用于处理嵌套结构
             {
                 result: [],//一个块的结果集
@@ -26,12 +27,15 @@
                 branchStack: []//分支栈 用于处理if endif嵌套关系的栈
             }
         ];
+
         this.text = '';//当前解析的文本
         this.idx = 0;//解析索引
         this.skipMode = false;//忽略模式 最外层block的if语句会及时求值如果条件为false 则会进入忽略模式 忽略模式忽略所有内容的解析，直到if块的结束
         this.scope = scope;//全局的作用域对象 （整个模板被定义为一个块 最外层的块 这个记录该块的作用与对象 其实就是用户传给模板引擎的对象）
         this.blockContent = {};//储存解析过程中块的内容即{}之间的文本
+        this.partials=partials||{};
         this.html = html;//模板
+        this.htmlStack=[];
         this.deferEval = false;//延时求值模式 除了最外层的块 任何一个块里的解析都不会立即求值只会暂存 因为当前块的scope由上层块决定 此时无法确定
         this.Block = function () {
             return this.blockStack[this.blockStack.length - 1];
@@ -44,6 +48,27 @@
 
 
     Context.prototype = {
+        startPartials:function(name){
+            var partials = this.partials[name];
+            if (partials) {
+                this.htmlStack.push({html: this.html, idx: this.idx + 1});
+                this.html = partials;
+                this.idx = -1;
+            }
+            else {
+                this.throwError('undefined partials! :"' + name + '"');
+            }
+        },
+        endPartials:function(){
+            if(this.idx>=this.html.length&&this.htmlStack.length>0){
+                do{
+                    var obj=this.htmlStack.pop();
+                    this.html=obj.html;
+                    this.idx=obj.idx;
+                }
+                while(this.idx>=this.html.length&&this.htmlStack.length>0);
+            }
+        },
 
         saveVar: function (exp, type) {//在当前结果集里储存一个节点 节点类型由type确定 可能是一个延时求值的节点 可能是一个嵌套的block
             this.Block().result.push({ exp: exp, type: type, idx: this.idx});
@@ -114,7 +139,7 @@
             var self = this, oldExp = exp, f;
             var m = /^(\!)?(\$[$_a-zA-Z0-9.]*)$/.exec(exp);//对于没有表达式的情况进行优化。
             if (m != null) {
-                var obj=this.eval(scope,m[2]);
+                var obj=this.eval(scope,m[2].slice(1));
                 if(obj instanceof Array){
                     f=obj.length>0;
                 }
@@ -546,6 +571,11 @@
             context.Block().result.push(res);
         }
     });
+    BlockMode.addMode('<',{
+        onEndBlock:function(blockContent,context){
+            context.startPartials(blockContent);
+        }
+    });
     BlockMode.addMode('!', {
         onEndBlock: function (b, context) {
 
@@ -747,22 +777,22 @@
     });
 
 
-    function render(html, data) {
+    function render(html, data,partials) {
         if (!html) {
             return html;
         }
-        if (data == undefined || data == null) {
-            data = {};
-        }
         var ch = '',
-            context = new Context(html, data);
-        while (context.idx < html.length) {
-            ch = html.charAt(context.idx);
+            context = new Context(html, data,partials);
+        while (context.idx < context.html.length) {
+            ch = context.html.charAt(context.idx);
             resolveChar(ch, context);
             if (context.error) {
                 break;
             }
+
             context.idx++;
+            context.endPartials();
+
         }
         if (context.error) {
             return context.errorMsg;

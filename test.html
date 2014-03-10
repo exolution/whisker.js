@@ -51,6 +51,12 @@
 <script type="text/html" data="{abc:3,$num:2}" id="tmpl_3">
     {%$abc-1*$num}
 </script>
+
+<script type="text/html" data="{abc:3,$num:2}" id="tmpl_4">
+    {#each $}
+    <li>{<$type}</li>
+    {/each}
+</script>
 <script type="text/javascript">
     var $=function(id){
         return document.getElementById(id).innerHTML;
@@ -68,7 +74,15 @@
         console.timeEnd(i);
     }
     console.log(html)
-
+    var x=Whisker.render('{#each $}<li>{<b}</li>{/each}',[
+        {type:'a',name:'ooxx',list:[1,2,3]},
+        {type:'b',name:'coc',list:[4,6]}
+    ],
+            {
+                'a':'{$name}',
+                'b':'{<a}',
+                'p-c':'{#each $list}<b>{$}</b>{/each}'
+            })
 </script>
 </body>
 </html>
