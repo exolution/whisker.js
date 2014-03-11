@@ -62,6 +62,24 @@
     function Eval(exp){
         return new Function('','return '+exp)();
     }
+
+    function Block(context,name, args, scope){
+            this.result=[];
+            this.branchStack= [];
+            this.blockName=name;
+            this.blockArgs=args;
+            this.blockScope=scope ;
+            this.type='block';
+            this.idx=context.idx;
+            this.parent=context.Block();
+            this.context=context;
+    }
+    Block.prototype={
+      resolve:function(){
+
+      }
+    };
+
     function Context(html, scope,partials) {//解析的上下文 整个模板解析过程都依赖这个结构
         scope=scope||{};
         this.blockStack = [ //块结构 用于处理嵌套结构
@@ -680,7 +698,6 @@
                 var val = params[3];
             }
             var list = block.blockScope;
-
             if (list) {
                 if (list.length > 0) {
                     for (var i = 0; i < list.length; i++) {
@@ -692,7 +709,6 @@
                         else {
                             scope = list[i];
                         }
-
                         result += context.resolveBlock(block, scope);
                     }
                 }
