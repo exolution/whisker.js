@@ -2,7 +2,8 @@
  * Whisker.js
  * A logic-less and extensible template engine
  * @author exolution
- * @version v0.3.6
+ * @version v0.3.8 add renderSimple &fix some bug
+ * @change-log v0.3.7 fix some bug
  *
  * */
 ;
@@ -183,7 +184,7 @@
         },
         test: function (scope, exp) {//条件表达式测试
             var self = this, oldExp = exp, f;
-            var m = /^(\!)?(\$[$_a-zA-Z0-9.]*)$/.exec(exp);//对于没有表达式的情况进行优化。
+            var m = /^(\!)?(\$\^?[$_a-zA-Z0-9.$]*)$/.exec(exp);//对于没有表达式的情况进行优化。
             if (m != null) {
                 var obj=this.eval(scope,m[2].slice(1));
                 if(obj instanceof Array){
@@ -198,7 +199,7 @@
                 return f;
             }
             else {
-                exp = exp.replace(/\$([_a-zA-Z0-9.]*)/g, function (a, b) {
+                exp = exp.replace(/\$(\^?[_a-zA-Z0-9.$]*)/g, function (a, b) {
                     var v = self.eval(scope, b);
                     if (typeof v == 'string') {
                         v = '"' + v + '"';
@@ -226,13 +227,15 @@
                 var tok = ret[1].split(','), args = [];
                 for (var i = 0; i < tok.length; i++) {
                     var val = tok[i];
+
                     if (!isNaN(+val)) {
                         args.push(+val);
                     }
                     else if (val.charAt(0) == "'" && val.charAt(val.length - 1) == "'") {
                         args.push(val.slice(1,-1));
                     }
-                    else if (/^\$[_a-zA-Z0-9.]*$/.test(val)) {
+                    else if (/^\$\^?[_a-zA-Z0-9.$]*$/.test(val)) {
+
                         args.push(this.eval(scope, val.slice(1)));
                     }
                     else {
@@ -258,7 +261,12 @@
                 return scope;
             }
             exp = exp.replace(/\$([^.]*)/g, function (a, b) {//解析$表达式中的$xx替换成其值的字面量
-                return curObj[b];
+                if(b==''){
+                    return curObj;
+                }
+                else{
+                    return curObj[b];
+                }
             });
             if (exp.charAt(0) == '^') {
                 curObj = this.scope;
@@ -599,7 +607,7 @@
     BlockMode.addMode('%', {
         onEndBlock: function (blockContent, context) {
             var block = context.Block();
-            var exp = blockContent.replace(/\$([_a-zA-Z0-9.]*)/g, function (a, b) {
+            var exp = blockContent.replace(/\$(\^?[_a-zA-Z0-9.$]*)/g, function (a, b) {
                 var v = context.eval(block.blockScope, b);
                 if (typeof v == 'string') {
                     v = '"' + v + '"';
@@ -664,7 +672,7 @@
     };
     BlockManager.register('each', function (context, block) {
         var result = '';
-        var params = /^\$([a-zA-Z0-9_.]*)(?:\(\$([a-zA-Z0-9_]+)=>\$([a-zA-Z0-9_]+)\))?$/.exec(block.blockArgs);
+        var params = /^\$(\^?[a-zA-Z0-9_.$]*)(?:\(\$([a-zA-Z0-9_]+)=>\$([a-zA-Z0-9_]+)\))?$/.exec(block.blockArgs);
         if (params) {
             block.blockScope = context.eval(block.blockScope, params[1]);
             if (params[2]) {
@@ -854,15 +862,26 @@
 
         return context.resolveBlock();
     }
-
+    function renderSimple(html,data){
+        return html.replace(/\{\$([_a-zA-Z0-9]*)\}/g,function(a,b){
+            var val=data[b];
+            if(val==undefined){
+                return 'undefined';
+            }
+            else {
+                return val.toString();
+            }
+        });
+    }
 
     var whisker = {};
     whisker.Context = Context;
     whisker.GroupManager = GroupManager;
     whisker.BlockMode = BlockMode;
     whisker.render = render;
+    whisker.renderSimple=renderSimple;
     whisker.tmpl=function(id){
-      var el=document.getElementById(id);
+        var el=document.getElementById(id);
         return el&&el.innerHTML;
     };
     whisker.setDelimeter=function(begin,end){
@@ -872,7 +891,7 @@
         Format.flag=flag;
     };
     whisker.config=function(name,args){
-      this['set'+name.charAt(0).toUpperCase()+name.slice(1)].apply(this,Array.prototype.slice.call(arguments,1));
+        this['set'+name.charAt(0).toUpperCase()+name.slice(1)].apply(this,Array.prototype.slice.call(arguments,1));
     };
     whisker.register = function (name, handler) {
         BlockManager.register(name, handler);
