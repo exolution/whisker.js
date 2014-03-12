@@ -2,8 +2,12 @@
  * Whisker.js
  * A logic-less and extensible template engine
  * @author exolution
- * @version v0.3.8 add renderSimple &fix some bug
- * @change-log v0.3.7 fix some bug
+ * @version
+ * v0.3.9 fix expression in defer
+ * @change-log
+ *      v0.3.8 add renderSimple &fix some bug
+ *      v0.3.7 fix some bug
+ *
  *
  * */
 ;
@@ -459,6 +463,29 @@
 
         ctx.result += this.invoke(scope, varNode.exp);
     });
+    VarNodeManager.add('expression',function(varNode,scope,ctx){
+        var self=this;
+        var exp = varNode.exp.replace(/\$(\^?[_a-zA-Z0-9.$]*)/g, function (a, b) {
+
+            var v = self.eval(scope, b);
+            if (typeof v == 'string') {
+                v = '"' + v + '"';
+            }
+            else if (v == undefined) {
+                return 'undefined';
+            }
+            else if (typeof v == 'object') {
+                return !!v;
+            }
+            return v.toString();
+        });
+        try {
+            var res = Eval(exp);
+        } catch (e) {
+            this.throwError('%express error:"' + varNode.exp + '" real value="' + exp + '"');
+        }
+        ctx.result+=res;
+    });
     VarNodeManager.add('property', function (varNode, scope, ctx) {
         var flag=false;
         if(varNode.exp.indexOf('~')!=-1){
@@ -624,26 +651,33 @@
     BlockMode.addMode('@', MethodHandler);
     BlockMode.addMode('%', {
         onEndBlock: function (blockContent, context) {
-            var block = context.Block();
-            var exp = blockContent.replace(/\$(\^?[_a-zA-Z0-9.$]*)/g, function (a, b) {
-                var v = context.eval(block.blockScope, b);
-                if (typeof v == 'string') {
-                    v = '"' + v + '"';
+            if (!context.skipMode) {
+                if (context.deferEval) {
+                    context.saveVar(blockContent, 'expression');
+                } else {
+                    var block = context.Block();
+                    var exp = blockContent.replace(/\$(\^?[_a-zA-Z0-9.$]*)/g, function (a, b) {
+
+                        var v = context.eval(block.blockScope, b);
+                        if (typeof v == 'string') {
+                            v = '"' + v + '"';
+                        }
+                        else if (v == undefined) {
+                            return 'undefined';
+                        }
+                        else if (typeof v == 'object') {
+                            return !!v;
+                        }
+                        return v.toString();
+                    });
+                    try {
+                        var res = Eval(exp);
+                    } catch (e) {
+                        context.throwError('%express error:"' + blockContent + '" real value="' + exp + '"');
+                    }
+                    context.Block().result.push(res);
                 }
-                else if (v == undefined) {
-                    return 'undefined';
-                }
-                else if (typeof v == 'object') {
-                    return !!v;
-                }
-                return v.toString();
-            });
-            try {
-                var res =Eval(exp);
-            } catch (e) {
-                context.throwError('%express error:"' + blockContent + '" real value="' + exp + '"');
             }
-            context.Block().result.push(res);
         }
     });
     BlockMode.addMode('<',{
