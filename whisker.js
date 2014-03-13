@@ -12,14 +12,36 @@
  * */
 ;
 !function () {
-
-    var ParseState = {//解析状态
-        OUT_BLOCK: 0,
-        IN_BLOCK: 1
-    };
-    var config={
-
-    };
+    //解析状态
+    var _ParseState = {OUT_BLOCK: 0,IN_BLOCK: 1},
+        _config={},
+        _simpleRenderReg,
+        _regReserved=function(){//生成正则表达式的保留字表 用于决定是否转义
+            var tok='^$()[]{}.?+*|'.split(''),res={};
+            for(var i=0;i<tok.length;i++){
+                res[tok[i]]=true;
+            }
+            return res;
+        }();
+    
+    
+    
+    function setSimpleReg(begin,end){
+        var simpleReg=begin+'$#'+end;
+        simpleReg=simpleReg.replace(/./g,function(a){
+            if(_regReserved[a]){
+                return '\\'+a;
+            }
+            else if(a=='#'){
+                return '([_a-zA-Z0-9]*)';
+            }
+            else {
+                return a;
+            }
+        });
+        return new RegExp(simpleReg,'g');
+    }
+   
     function Delimeter(begin,end){
         end=end||begin;
         if(begin.length+end.length<=4){
@@ -28,7 +50,6 @@
             if(this.beginNum>1){
                 this.b=[begin.charAt(0),begin.charAt(1)];
             }
-
             this.endNum=end.length;
             this.end=end;
             if(this.endNum>1){
@@ -36,8 +57,9 @@
             }
         }
         else{
-            console.warn('max delimeter length is 2');
+            console&&console.warn&&console.warn('max delimeter length is 2');
         }
+        _simpleRenderReg=setSimpleReg(begin,end)
     }
     Delimeter.prototype={
         isBegin:function(ch,idx,text){
@@ -62,7 +84,7 @@
     };
 
 
-    config.delimeter=new Delimeter('{','}');
+    _config.delimeter=new Delimeter('{','}');
     function Eval(exp){
         return new Function('','return '+exp)();
     }
@@ -408,18 +430,18 @@
 
     function resolveChar(ch, context) {
         var nch, handler;
-        if (context.state != ParseState.IN_BLOCK && config.delimeter.isBegin(ch,context.idx,context.html)) {
-            nch = context.html.charAt(context.idx + config.delimeter.beginNum);
+        if (context.state != _ParseState.IN_BLOCK && _config.delimeter.isBegin(ch,context.idx,context.html)) {
+            nch = context.html.charAt(context.idx + _config.delimeter.beginNum);
             if (BlockMode.filter.test(nch)) {
                 if (!context.skipMode) {
                     context.Block().result.push(context.text);
                     context.text = '';
                 }
-                context.state = ParseState.IN_BLOCK;
+                context.state = _ParseState.IN_BLOCK;
                 context.blockType = nch;
                 handler = BlockMode.handlers[nch];
                 handler.onStartBlock && handler.onStartBlock(context);
-                context.idx+= config.delimeter.beginNum;
+                context.idx+= _config.delimeter.beginNum;
             }
             else {
                 if (!context.skipMode) {
@@ -427,14 +449,14 @@
                 }
             }
         }
-        else if (context.state == ParseState.IN_BLOCK) {
-            if (config.delimeter.isEnd(ch,context.idx,context.html)) {
-                context.state = ParseState.OUT_BLOCK;
+        else if (context.state == _ParseState.IN_BLOCK) {
+            if (_config.delimeter.isEnd(ch,context.idx,context.html)) {
+                context.state = _ParseState.OUT_BLOCK;
                 var blockContent = context.blockContent[context.blockType];
                 handler = BlockMode.handlers[context.blockType];
                 context.blockContent[context.blockType] = '';
                 handler.onEndBlock && handler.onEndBlock(blockContent, context);
-                context.idx+=config.delimeter.endNum-1;
+                context.idx+=_config.delimeter.endNum-1;
             }
             else {
                 handler = BlockMode.handlers[context.blockType];
@@ -572,8 +594,8 @@
                     context.blockContent[context.blockType] += ch;
                 }
                 else {
-                    context.text += config.delimeter.begin + context.blockType + context.blockContent[context.blockType] + ch;
-                    context.state = ParseState.OUT_BLOCK;
+                    context.text += _config.delimeter.begin + context.blockType + context.blockContent[context.blockType] + ch;
+                    context.state = _ParseState.OUT_BLOCK;
                 }
             }
         }
@@ -913,7 +935,7 @@
         return context.resolveBlock();
     }
     function renderSimple(html,data){
-        return html.replace(/\{\$([_a-zA-Z0-9]*)\}/g,function(a,b){
+        return html.replace(_simpleRenderReg,function(a,b){
             var val=data[b];
             if(val==undefined){
                 return 'undefined';
@@ -935,7 +957,7 @@
         return el&&el.innerHTML;
     };
     whisker.setDelimeter=function(begin,end){
-        config.delimeter=new Delimeter(begin,end);
+        _config.delimeter=new Delimeter(begin,end);
     };
     whisker.setFormat=function(flag){
         Format.flag=flag;

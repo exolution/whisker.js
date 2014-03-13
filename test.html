@@ -73,7 +73,7 @@
         html[i]=html[id]=Whisker.render($(id),data);
         console.timeEnd(i);
     }
-    console.log(html)
+    console.log(html);
     var x=Whisker.render('{#each $}<li>{<b}</li>{/each}',[
         {type:'a',name:'ooxx',list:[1,2,3]},
         {type:'b',name:'coc',list:[4,6]}
@@ -82,7 +82,10 @@
                 'a':'{$name}',
                 'b':'{<a}',
                 'p-c':'{#each $list}<b>{$}</b>{/each}'
-            })
+            });
+    Whisker.setDelimeter('<?php','?>');
+    var str=Whisker.renderSimple('<div><?php$abc?></div>',{abc:'exolution'});
+    console.log(str);
 </script>
 </body>
 </html>

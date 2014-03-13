@@ -1,4 +1,4 @@
-#Whisker.js v0.3.6 - 轻逻辑&可扩展的js模板引擎
+#Whisker.js v0.3.9 - 轻逻辑&可扩展的js模板引擎
 
 ##为什么选择 Whisker.js?
 
@@ -33,7 +33,7 @@ whisker解析式会发现错误并报告模板中出现错误的位置，方便�
 whisker默认使用{}为界定符 并且支持自定义开始界定符和结束界定符， 最多支持两个字符如'<%','%>'
 建议在和后台模板语言冲突（如php的smarty）时才自定义界定符。 因为单字符界定符其他符号容易在js中出现被误解析，而两个字符的界定符多多少少会影响性能~
 
-不依赖任何框架，压缩后仅10k。
+>不依赖任何框架，压缩后仅10k。
 
 ##快速上手
 一个简单地示例如下
@@ -228,10 +228,31 @@ Whisker.render('{#each $}{<out}{/each}',data,{
 如
 ```js
    Whisker.setDelimeter('#','#');//单字符中，只有#$xxx#不容易被误解析 其他的都容易出现在js表达式中
-   Whisker.setDelimete('<%','%>');
-   Whisker.setDelimeter('<php','·')
+   Whisker.setDelimete('<%','%>');//定义双字符界定符时，注意别和后端模板语言冲突
+   Whisker.setDelimeter('<?php','?>')//错误！不支持超过两个字符的界定符 
 ```
 
+##renderSimple
+有时候，模板并不需要非常复杂的逻辑 只需要简单的替换某些变量，这样再用解析式render就有点儿大材小用了，所以本着量体裁衣的原则，whisker提供了简单的替换渲染
+renderSimple函数接受参数和render一样(不包含partials) 但是只支持{$property}属性 且属性不支持任何操作 （如. ~ ^） 
+另外，界定符({})可以自定义 使用setDelimeter即可 
+```js
+Whisker.setDelimeter('<?php','?>');
+Whisker.renderSimple('<div><?php$abc?></div>',{abc:'exolution'});
+//result <div>exolution</div>
+```
+
+P.S. renderSimple的界定符设置没有字符数限制 所以setDelimeter设置多于两个字符的界定符时 会对render无效(会发出警告 console.warn) 而对renderSimple有效 （这点设定虽然看起来有些不合理 其实是妥协兼顾于 界定符的一致性和多样性 有什么好的建议 请联系我）
+
+
+##配置项
+目前配置项主要由两个 第一个是界定符
+第二个是格式化输出
+```js
+Whisker.setFormat(true);//启用格式化输出。 目前格式化的结果是 去掉模板块左右的回车和多余缩进 
+Whisker.config('delimeter','<%','%>');//同时可以以这种形式进行配置
+Whisker.config('format',true);
+···
 
 
 ##扩展性
@@ -293,20 +314,20 @@ BlockManager.register('each', function (context, block) {
         return result;//返回最终结果
     });
 ```
-写到这突然发现，这所谓的扩展好复杂啊。还得隐藏底层细节。回去继续重构~ 不过不耽误使用
+写到这突然发现，这所谓的扩展好复杂啊。还得隐藏底层细节。回去继续重构~ 不过不耽误使用（将在v0.4中重构）
 
 下一步计划
 * 1、重构，优化用户扩展性
 * 2、专注性能~ 之前的简单测试中性能在mustache之下在handlebar之上
 * 3、预编译，其实我的模式现在编译和计算结构本来就分离的。原理就是把整个模板编译成一个block链组成的结果集。可以考虑下把这个结果集持久化，然后直接求值，提高效率。
-* 4、配置化 定制化。 目前想一些格式化功能和一些无关痛痒的功能可以选配。
+* 4、配置化 定制化。 目前想一些格式化功能和一些无关痛痒的功能可以选配。(已完成一部分)
 
 
 
 ##自述
-最早是想做一个类似SSH (Struts2 Spring Hibernate) Nodejs server框架。为了支持action，所以就想写个模板引擎。
+最早是想做一个类似SSH (Struts2 Spring Hibernate) Nodejs server框架。为了支持Action，所以就想写个模板引擎。
 使用{$xxx}其实是模仿EL表达式的，跟mushtache和handlebar没啥关系，反倒觉得他们{{}}好奇怪，好麻烦啊。可能是更好解析，但是{}只要规范控制也会好的解析和分离啊，虽然说{$xx}这种js是不会报错的，但没人会这么写吧，如果你转牛角尖我也没什么办法，╮(╯_╰)╭(由于属性名有严格限制所以{$abc:1} {$abc=1}这一类的都不会被错误的识别成属性)。其实最容易出问题的反而是正则表达式/[{$abc}]/。不过只要稍微改变下写法就能避免。
-当然了，我还是参考了mustache和handlebar的优点的，但是懒得研究他们的代码，不过还是取了whisker(络腮胡)这个名字，和他们保持队形 ^_^。
+当然了，我还是参考了mustache和handlebar的优点的，但是懒得研究他们的代码，不过还是取了whisker(络腮胡子)这个名字，和他们保持队形 ^_^。
 目前我已经在我的各种项目中应用whisker。如果你有什么好的建议或者意见，或者发现了一些BUG，请开一个issue或者mail我
 
 exolution#163.com
@@ -314,6 +335,16 @@ exolution#163.com
 
 
 
+##change log
+
+
+v0.3.9 修复表达式计算的bug（之前没有延迟求值） renderSimple加入界定符
+v0.3.8 增加一个新的api renderSimple 用于快速替换模板中的属性（{$xxx}） 并修复一些BUG
+v0.3.7 bug fix
+v0.3.6 增加界定符自定义和配置项（目前可配置是否美化格式化输出结果）
+v0.3.5 增加 导入外部模板功能(partials)
+v0.3.4 优化 if语句。如果if中不含表达式 则快速判断结果 不再使用eval
+v0.3.3 establish first add to git
 
 
 额 下面蹩脚的英文可以无视之~
