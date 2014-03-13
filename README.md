@@ -338,13 +338,13 @@ exolution#163.com
 ##change log
 
 
-v0.3.9 修复表达式计算的bug（之前没有延迟求值） renderSimple加入界定符
-v0.3.8 增加一个新的api renderSimple 用于快速替换模板中的属性（{$xxx}） 并修复一些BUG
-v0.3.7 bug fix
-v0.3.6 增加界定符自定义和配置项（目前可配置是否美化格式化输出结果）
-v0.3.5 增加 导入外部模板功能(partials)
-v0.3.4 优化 if语句。如果if中不含表达式 则快速判断结果 不再使用eval
-v0.3.3 establish first add to git
+* v0.3.9 修复表达式计算的bug（之前没有延迟求值） renderSimple加入界定符
+* v0.3.8 增加一个新的api renderSimple 用于快速替换模板中的属性（{$xxx}） 并修复一些BUG
+* v0.3.7 bug fix
+* v0.3.6 增加界定符自定义和配置项（目前可配置是否美化格式化输出结果）
+* v0.3.5 增加 导入外部模板功能(partials)
+* v0.3.4 优化 if语句。如果if中不含表达式 则快速判断结果 不再使用eval
+* v0.3.3 establish first add to git
 
 
 额 下面蹩脚的英文可以无视之~
