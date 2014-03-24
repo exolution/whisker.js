@@ -23,9 +23,6 @@
             }
             return res;
         }();
-
-
-
     function resolveChar(ch, context) {
         var nch, handler;
         if (context.state != _ParseState.IN_SECTION && _config.delimeter.isBegin(ch,context.idx,context.html)) {
@@ -187,11 +184,12 @@
 
     });
 
-    function Block(name, scope,handler){
+    function Block(name, blockArgs,handler){
         this.result=[];
         this.branchStack= [];
         this.blockName=name;
-        this.blockScope=scope;
+        this.blockArgs=blockArgs;
+        this.blockScope=blockArgs;
         this.handler=handler;
         this.type='block';
     }
@@ -263,10 +261,10 @@
             this.Block().result.push({ exp: exp, type: type, idx: this.idx});
         },
 
-        newBlock: function (name, scope,handler) {//新建block 其实就是当前block入栈
+        newBlock: function (name, blockArgs,handler) {//新建block 其实就是当前block入栈
 
 
-            this.blockStack.push(new Block(name,this.Block().blockScope+'[\''+scope+'\']',handler));
+            this.blockStack.push(new Block(name,blockArgs,handler));
         },
         closeBlock: function () {//结束当前block
             var curBlock = this.blockStack.pop();
@@ -327,7 +325,7 @@
         return '+'+evalExp(scope,varNode.exp);
     });
     VarNodeManager.register('if',function(varNode,scope){
-        debugger;
+        
         var exp=varNode.exp.replace(/\$((\.\.\/)*[a-zA-Z0-9^.]*)/g,function(a,b){
             return evalExp(scope,b);
         });
@@ -424,6 +422,7 @@
                     syntaxSnippets=_syntaxSnippets[block.blockName];
                 }
                 var result='!function(){';
+                block.blockScope=evalExp(scope,block.blockArgs);
                 scope=scope||block.blockScope;
                 if(syntaxSnippets){
                     for(var i=0;i<syntaxSnippets.length;i++){
