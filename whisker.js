@@ -39,6 +39,12 @@
                 context.idx+= _config.delimeter.beginNum;
             }
             else {
+                if(ch==='\n'){
+                    ch='\\n';
+                }
+                if(ch=='\r'){
+                    ch='';
+                }
                 context.text += ch;
             }
         }
@@ -58,6 +64,12 @@
             }
         }
         else {
+            if(ch==='\n'){
+                ch='\\n';
+            }
+            if(ch=='\r'){
+                ch='';
+            }
             context.text += ch;
         }
     }
@@ -108,6 +120,7 @@
                 context.sectionContent[context.sectionType] += ch;
             }
             else {
+                context.sectionContent[context.sectionType]='';
                 context.text += _config.delimeter.begin + context.sectionType + context.sectionContent[context.sectionType] + ch;
                 context.state = _ParseState.OUT_SECTION;
             }
@@ -120,7 +133,15 @@
         },
         onSectionEnd:function(context,sectionContent){
             var split=sectionContent.indexOf(' ');
-            context.newBlock(sectionContent.substring(0,split),sectionContent.slice(split+1));
+            var blockName=sectionContent.substring(0,split);
+            var blockArgs=sectionContent.slice(split+1);
+
+            var blockInfo=BlockManager.process('BlockStart',blockName,context,blockArgs);
+
+            if(blockInfo!=false){
+
+                context.newBlock(blockName,blockInfo&&blockInfo.scope||blockArgs.slice(0),blockInfo&&blockInfo.handler);
+            }
         }
 
     });
@@ -130,12 +151,16 @@
         },
         onSectionEnd:function(context,sectionContent){
 
-            if(context.Block().blockName==sectionContent){
-                context.closeBlock();
+
+            if(BlockManager.process('BlockEnd',sectionContent,context)!=false){
+                if(context.Block().blockName==sectionContent){
+                    context.closeBlock();
+                }
+                else{
+                    console.warn(123);
+                }
             }
-            else{
-                console.warn();
-            }
+
 
         }
 
@@ -160,29 +185,24 @@
 
     });
 
-    function Block(context,name, scope, parent){
-
+    function Block(name, scope,handler){
         this.result=[];
         this.branchStack= [];
         this.blockName=name;
-
-        this.blockScope=scope ;
+        this.blockScope=scope;
+        this.handler=handler;
         this.type='block';
-        this.idx=context.idx;
-        this.parent=parent;
-        this.context=context;
     }
     Block.prototype={
-        resolve:function(scope,notneed){
+        resolve:function(scope){
             var result='';
-            scope=scope||this.blockScope;
             for(var i=0;i<this.result.length;i++){
                 var varNode=this.result[i];
                 if(typeof varNode=='object'){
-                    result+=VarNodeManager.handle(varNode,scope);
+                    result+=VarNodeManager.handle(varNode,scope,this.blockScope);
                 }
                 else{
-                    result+="+'"+varNode.toString().replace(/^\s*|\s*$/g,'\\n')+"'";
+                    result+="+'"+varNode.toString()+"'";
                 }
             }
             return result;
@@ -192,7 +212,7 @@
     function Context(html, scope,partials) {//解析的上下文 整个模板解析过程都依赖这个结构
         scope=scope||{};
         this.blockStack = [ //块结构 用于处理嵌套结构
-            new Block(this,'',scope,null)
+            new Block('','_scope_')
         ];
 
         this.text = '';//当前解析的文本
@@ -241,10 +261,10 @@
             this.Block().result.push({ exp: exp, type: type, idx: this.idx});
         },
 
-        newBlock: function (name, args,parent) {//新建block 其实就是当前block入栈
-            var curBlock=this.Block();
-            var scope=curBlock.blockScope+'[\''+args.slice(1)+'\']';
-            this.blockStack.push(new Block(this,name,scope,curBlock));
+        newBlock: function (name, scope,handler) {//新建block 其实就是当前block入栈
+
+
+            this.blockStack.push(new Block(name,this.Block().blockScope+'[\''+scope+'\']',handler));
         },
         closeBlock: function () {//结束当前block
             var curBlock = this.blockStack.pop();
@@ -254,7 +274,7 @@
             this.Block().result.push(curBlock);
         },
         resolve:function(){
-            return 'var result=\'\';\nresult=\'\''+this.Block().resolve()+'\nreturn result;';
+            return 'var result=\'\';\nresult=\'\''+this.Block().resolve()+';\nreturn result;';
         }
 
     };
@@ -264,64 +284,144 @@
             register:function(type,handler){
                 _handlers[type]=handler;
             },
-            handle:function(varNode,scope,context){
-                return _handlers[varNode.type](varNode,scope,context);
+            handle:function(varNode,scope,blockScope){
+                scope=scope||varNode.blockScope||blockScope;
+                return _handlers[varNode.type](varNode,scope);
             }
         }
     }();
-    VarNodeManager.register('property',function(varNode,scope,context){
-        return '+'+scope+'["'+varNode.exp+'"]';
+    function evalExp(scope,exp){
+        if(exp){
+            if(exp.charAt(0)=='^'){
+                scope=scope.substring(0,scope.indexOf('['));
+                exp=exp.slice(1);
+            }
+            if(exp.charAt(0)=='$'){
+                return exp.slice(1);
+            }
+            var idx=0,lidx=0;
+            while((idx=exp.indexOf('../',idx+1))!=-1){
+
+                scope=scope.substring(0,scope.lastIndexOf('['));
+                lidx=idx+3;
+            }
+            if(lidx>0){
+                exp=exp.slice(lidx);
+            }
+
+            var tok=exp.split(/\.|\//),result='';
+            result+=scope;
+            for(var i=0;i<tok.length;i++){
+                result+='[\''+tok[i]+'\']';
+            }
+            return result;
+        }
+        else {
+            return scope;
+        }
+    }
+    VarNodeManager.register('property',function(varNode,scope){
+
+        return '+'+evalExp(scope,varNode.exp);
     });
-    VarNodeManager.register('block',function(varNode,scope,context){
+    VarNodeManager.register('if',function(varNode,scope){
+        debugger;
+        var exp=varNode.exp.replace(/\$((\.\.\/)*[a-zA-Z0-9^.]*)/g,function(a,b){
+            return evalExp(scope,b);
+        });
+        return ";\nif("+exp+"){\nresult+=''";
+    });
+    VarNodeManager.register('endif',function(varNode,scope){
+        return ";\n}\nresult+=''";
+    });
+    VarNodeManager.register('elseif',function(varNode,scope){
+        var exp=varNode.exp.replace(/\$((\.\.\/)*[a-zA-Z0-9^.]*)/g,function(a,b){
+            return evalExp(scope,b);
+        });
+        return ";\n elseif("+exp+"){\nresult+=''";
+    });
+    VarNodeManager.register('else',function(varNode,scope){
+        return ";\n else {\nresult+=''";
+    });
+    VarNodeManager.register('block',function(varNode,scope){
         var result=';\n';
-        result+=BlockManager.handle(varNode,scope,context);
+        result+=BlockManager.handle(varNode,scope);
         return result;
     });
-    var BlockManager=function(){
-        var _syntaxSnippets={};
-        return {
-            register:function(type,handler){
 
-                var code=handler.toString(),
-                    syntaxSnippets=[];
+
+    var BlockManager=function(){
+        var _syntaxSnippets={},_processors={};
+        function _resolveSyntaxNode(type){
+            if(type.indexOf('$Body')!=-1){
+                return {
+                    type:'$Body',
+                    args:/\(([^)]*)\)/.exec(type)[1]
+                }
+            }
+            else if(type.indexOf('$Scope')!=-1){
+                return {
+                    type:'$Scope'
+                }
+            }
+            else if(type.indexOf('$Param')!=-1){
+                return {
+                    type:'$Param',
+                    args:type.slice(-1)
+                }
+            }
+            else {
+                return '';
+            }
+        }
+        return {
+            registerProcessor:function(blockName,processor){
+                _processors[blockName]={};
+                for(var key in processor){
+
+                    if(processor.hasOwnProperty(key)){
+                        _processors[blockName][key.replace(/^on/,'')]=processor[key];
+                    }
+                }
+            },
+            process:function(type,blockName,context,blockArgs){
+                var processor=_processors[blockName]&&_processors[blockName][type];
+                if(processor){
+                    return processor(context,blockArgs);
+
+                }
+                return undefined;
+
+            },
+            registerHandler:function(blockName,handler){
+                var code=handler.toString(),syntaxSnippets=[];
                 code=code.slice(code.indexOf('{')+1,-1);
-                var splitReg=/\$Content\(([^)]*)\)/g;
+                var splitReg=/\$Body\(([^)]*)\)|\$Scope|\$Param\d/g;
                 var codeSplits;
                 var lastIndex=0;
                 while(codeSplits=splitReg.exec(code)){
-
                     var codeFrag=code.substring(lastIndex,codeSplits.index);
                     lastIndex=codeSplits.index+codeSplits[0].length;
-                    var codeFragSplits=codeFrag.split('$Scope');
-                    for(var j=0;j<codeFragSplits.length;j++){
-                        if(j>0){
-                            syntaxSnippets.push({type:'$Scope'});
-                        }
-                        syntaxSnippets.push(codeFragSplits[j]);
-
-                    }
-                    syntaxSnippets.push({
-                        type:'$Content',
-                        scope:codeSplits[1]
-                    });
+                    syntaxSnippets.push(codeFrag);
+                    syntaxSnippets.push(_resolveSyntaxNode(codeSplits[0]));
                 }
                 if(lastIndex<code.length){
                     codeFrag=code.slice(lastIndex);
-                    codeFragSplits=codeFrag.split('$Scope');
-                    for(j=0;j<codeFragSplits.length;j++){
-                        if(j>0){
-                            syntaxSnippets.push({type:'$Scope'});
-                        }
-                        syntaxSnippets.push(codeFragSplits[j]);
-                    }
+                    syntaxSnippets.push(codeFrag);
                 }
 
-                _syntaxSnippets[type]=syntaxSnippets;
+                _syntaxSnippets[blockName]=syntaxSnippets;
                 console.log(syntaxSnippets);
             },
-            handle:function(block,scope,context){
-                var syntaxSnippets=_syntaxSnippets[block.blockName];
-                var result='';
+            handle:function(block,scope){
+
+                if(block.handler){
+                    var syntaxSnippets=_syntaxSnippets[block.blockName+'.'+block.handler.namespace];
+                }
+                else{
+                    syntaxSnippets=_syntaxSnippets[block.blockName];
+                }
+                var result='!function(){';
                 scope=scope||block.blockScope;
                 if(syntaxSnippets){
                     for(var i=0;i<syntaxSnippets.length;i++){
@@ -330,15 +430,18 @@
                             if(snippet.type=='$Scope'){
                                 result+=scope;
                             }
-                            else{
-                                result+='\'\''+block.resolve(snippet.scope&&snippet.scope.replace('$Scope',scope));
+                            else if(snippet.type=='$Body'){
+                                result+='\'\''+block.resolve(snippet.args&&snippet.args.replace('$Scope',scope));
+                            }
+                            else if(snippet.type=='$Param'){
+                                result+=block.handler[snippet.args];
                             }
                         }
                         else {
-                            result+=snippet.replace(/^\s*|\s*$/g,'\\n');
+                            result+=snippet.replace(/^\s*|\s*$/g,'');
                         }
                     }
-                    return result;
+                    return result+'}();\n';
                 }
                 else{
                     return '';
@@ -346,9 +449,72 @@
             }
         }
     }();
-    BlockManager.register('each',function($Scope,$Content){
+    BlockManager.registerProcessor('if',{
+        onBlockStart:function(context,blockArgs){
+
+            context.saveVar(blockArgs,'if');
+            return false;
+        },
+        onBlockEnd:function(context,blockArgs){
+            context.saveVar('','endif');
+        }
+    });
+    BlockManager.registerProcessor('elseif',{
+        onBlockStart:function(context,blockArgs){
+            context.saveVar(blockArgs,'branch');
+            return false;
+        },
+        onBlockEnd:function(){
+            return false;
+        }
+    });
+    BlockManager.registerProcessor('else',{
+        onBlockStart:function(context,blockArgs){
+            context.saveVar(blockArgs,'else');
+            return false;
+        }
+        ,
+        onBlockEnd:function(){
+            return false;
+        }
+    });
+    BlockManager.registerProcessor('each', {
+        onBlockStart: function (context,blockArgs) {
+            var params = /^\$(\^?[a-zA-Z0-9_.$]*)(?:\(\$([a-zA-Z0-9_]+)=>\$([a-zA-Z0-9_]+)\))?$/.exec(blockArgs);
+            if (blockArgs) {
+                if (params[2] && params[3]) {
+
+                    return{
+                        scope: params[1],
+                        handler: {
+                            namespace: 'forin',
+                            1: params[2],
+                            2: params[3]
+                        }
+                    }
+                }
+                else {
+                    return {};
+                }
+            }
+            else {
+                console.log('error');
+            }
+        }
+    });
+    BlockManager.registerHandler('each',function($Scope,$Body){
+        for(var index=0;index<$Scope.length;index++){
+            var seq=index+1;
+            result+=$Body($Scope[index]);
+        }
+    });
+    BlockManager.registerHandler('each.forin',function($Scope,$Body){
         for(var i=0;i<$Scope.length;i++){
-            result+=$Content($Scope[i]);
+            var scope={
+                $Param2:$Scope[i],
+                $Param1:i
+            };
+            result+=$Body(scope);
         }
     });
     function render(html, data,partials) {
@@ -375,8 +541,9 @@
             var blockName=context.Block().blockName;
             //context.throwError('{#' + blockName + '} need a close block "{/' + blockName + '}"');
         }
+        debugger;
         var code= context.resolve();
-        return new Function('scope',code);
+        return new Function('_scope_',code);
 
 
     }
