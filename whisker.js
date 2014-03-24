@@ -120,9 +120,11 @@
                 context.sectionContent[context.sectionType] += ch;
             }
             else {
-                context.sectionContent[context.sectionType]='';
+
                 context.text += _config.delimeter.begin + context.sectionType + context.sectionContent[context.sectionType] + ch;
                 context.state = _ParseState.OUT_SECTION;
+                context.sectionContent[context.sectionType]='';
+
             }
 
         }
