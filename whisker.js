@@ -139,7 +139,7 @@
 
             if(blockInfo!=false){
 
-                context.newBlock(blockName,blockInfo&&blockInfo.scope||blockArgs.slice(0),blockInfo&&blockInfo.handler);
+                context.newBlock(blockName,blockInfo&&blockInfo.scope||blockArgs.slice(1),blockInfo&&blockInfo.handler);
             }
         }
 
@@ -196,10 +196,11 @@
     Block.prototype={
         resolve:function(scope){
             var result='';
+            scope=scope||this.blockScope;
             for(var i=0;i<this.result.length;i++){
                 var varNode=this.result[i];
                 if(typeof varNode=='object'){
-                    result+=VarNodeManager.handle(varNode,scope,this.blockScope);
+                    result+=VarNodeManager.handle(varNode,scope);
                 }
                 else{
                     result+="+'"+varNode.toString()+"'";
@@ -284,8 +285,8 @@
             register:function(type,handler){
                 _handlers[type]=handler;
             },
-            handle:function(varNode,scope,blockScope){
-                scope=scope||varNode.blockScope||blockScope;
+            handle:function(varNode,scope){
+                //scope=scope||varNode.blockScope||blockScope;
                 return _handlers[varNode.type](varNode,scope);
             }
         }
@@ -359,11 +360,6 @@
                     args:/\(([^)]*)\)/.exec(type)[1]
                 }
             }
-            else if(type.indexOf('$Scope')!=-1){
-                return {
-                    type:'$Scope'
-                }
-            }
             else if(type.indexOf('$Param')!=-1){
                 return {
                     type:'$Param',
@@ -396,7 +392,7 @@
             registerHandler:function(blockName,handler){
                 var code=handler.toString(),syntaxSnippets=[];
                 code=code.slice(code.indexOf('{')+1,-1);
-                var splitReg=/\$Body\(([^)]*)\)|\$Scope|\$Param\d/g;
+                var splitReg=/\$Body\(([^)]*)\)|\$Param\d/g;
                 var codeSplits;
                 var lastIndex=0;
                 while(codeSplits=splitReg.exec(code)){
@@ -421,18 +417,15 @@
                 else{
                     syntaxSnippets=_syntaxSnippets[block.blockName];
                 }
-                var result='!function(){';
-                block.blockScope=evalExp(scope,block.blockArgs);
-                scope=scope||block.blockScope;
+                var result='!function($Scope){';
+                scope=block.blockScope=evalExp(scope,block.blockArgs);
+
                 if(syntaxSnippets){
                     for(var i=0;i<syntaxSnippets.length;i++){
                         var snippet=syntaxSnippets[i];
                         if(typeof snippet=='object'){
-                            if(snippet.type=='$Scope'){
-                                result+=scope;
-                            }
-                            else if(snippet.type=='$Body'){
-                                result+='\'\''+block.resolve(snippet.args&&snippet.args.replace('$Scope',scope));
+                            if(snippet.type=='$Body'){
+                                result+='\'\''+block.resolve(snippet.args);
                             }
                             else if(snippet.type=='$Param'){
                                 result+=block.handler[snippet.args];
@@ -442,7 +435,7 @@
                             result+=snippet.replace(/^\s*|\s*$/g,'');
                         }
                     }
-                    return result+'}();\n';
+                    return result+'}('+scope+');\nresult+=\'\'';
                 }
                 else{
                     return '';
@@ -542,7 +535,7 @@
             var blockName=context.Block().blockName;
             //context.throwError('{#' + blockName + '} need a close block "{/' + blockName + '}"');
         }
-        debugger;
+
         var code= context.resolve();
         return new Function('_scope_',code);
 
@@ -609,6 +602,5 @@
     window.Whisker={
         render:render
     };
-
 
 }();
